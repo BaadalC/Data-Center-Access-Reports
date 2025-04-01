@@ -2,6 +2,8 @@
   "type": "module",
   "dependencies": {
     "busboy": "^1.6.0",
-    "exceljs": "^4.3.0"
+    "exceljs": "^4.3.0",
+    "file-type": "^18.0.0",
+    "csv-parse": "^5.5.0"
   }
 }
