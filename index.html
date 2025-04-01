@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Access Report Comparator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h2>Access Report Comparator</h2>
+
+ <form id="uploadForm">
+  <h3>Upload Main Working Sheet (6 Tabs)</h3>
+  <label>Main Working Excel File:</label>
+  <input type="file" id="mainFile" accept=".xlsx" required /><br><br>
+
+  <h3>Upload Reference Files (One for Each Door)</h3>
+  <label>Door 1:</label>
+  <input type="file" id="door1" accept=".xlsx" required /><br><br>
+
+  <label>Door 2:</label>
+  <input type="file" id="door2" accept=".xlsx" required /><br><br>
+
+  <label>Door 3:</label>
+  <input type="file" id="door3" accept=".xlsx" required /><br><br>
+
+  <label>Door 4:</label>
+  <input type="file" id="door4" accept=".xlsx" required /><br><br>
+
+  <label>Door 5:</label>
+  <input type="file" id="door5" accept=".xlsx" required /><br><br>
+
+  <label>Door 6:</label>
+  <input type="file" id="door6" accept=".xlsx" required /><br><br>
+
+  <button type="submit">Generate Highlighted Report</button>
+</form>
+
+<div id="status"></div>
+
+
+  <div id="status"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
