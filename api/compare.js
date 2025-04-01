@@ -1,7 +1,8 @@
-// /api/compare.js (Vercel serverless function)
+// /api/compare.js (Vercel serverless function, supports xlsx and csv)
 import Busboy from "busboy";
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
+import { parse } from "csv-parse/sync";
 
 export const config = {
   api: {
@@ -18,11 +19,14 @@ export default async function handler(req, res) {
   const busboy = Busboy({ headers: req.headers });
 
   const parseForm = new Promise((resolve, reject) => {
-    busboy.on("file", (fieldname, file) => {
+    busboy.on("file", (fieldname, file, filename) => {
       const chunks = [];
       file.on("data", (data) => chunks.push(data));
       file.on("end", () => {
-        buffers[fieldname] = Buffer.concat(chunks);
+        buffers[fieldname] = {
+          buffer: Buffer.concat(chunks),
+          filename,
+        };
       });
     });
     busboy.on("finish", resolve);
@@ -33,19 +37,37 @@ export default async function handler(req, res) {
   await parseForm;
 
   const mainWorkbook = new ExcelJS.Workbook();
-  await mainWorkbook.xlsx.load(buffers.main);
+  await mainWorkbook.xlsx.load(buffers.main.buffer);
 
-  const doorBuffers = ["door1", "door2", "door3", "door4", "door5", "door6"].map(key => buffers[key]);
-  const doorWorkbooks = [];
-  for (const buffer of doorBuffers) {
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
-    doorWorkbooks.push(wb);
+  const doorKeys = ["door1", "door2", "door3", "door4", "door5", "door6"];
+  const doorDataList = [];
+
+  for (const key of doorKeys) {
+    const { buffer, filename } = buffers[key];
+    if (filename.endsWith(".csv")) {
+      const csv = buffer.toString("utf-8");
+      const records = parse(csv, { skip_empty_lines: true });
+      const names = records.map(([last, first]) => ({ last, first }));
+      doorDataList.push(names);
+    } else {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const sheet = wb.worksheets[0];
+      const names = [];
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum >= 4) {
+          const last = row.getCell(1).value?.toString().trim();
+          const first = row.getCell(2).value?.toString().trim();
+          if (last || first) names.push({ last, first });
+        }
+      });
+      doorDataList.push(names);
+    }
   }
 
   for (let i = 0; i < 6; i++) {
     const sheet = mainWorkbook.worksheets[i];
-    const doorSheet = doorWorkbooks[i].worksheets[0];
+    const doorNames = doorDataList[i];
 
     // Delete columns A–C from row 4 down
     for (let rowNum = sheet.rowCount; rowNum >= 4; rowNum--) {
@@ -60,17 +82,7 @@ export default async function handler(req, res) {
       if (!a && !b) sheet.spliceRows(rowNum, 1);
     }
 
-    // Read names from door file (columns A & B)
-    const doorNames = [];
-    doorSheet.eachRow((row, rowNum) => {
-      if (rowNum >= 4) {
-        const last = row.getCell(1).value?.toString().trim();
-        const first = row.getCell(2).value?.toString().trim();
-        if (last || first) doorNames.push({ last, first });
-      }
-    });
-
-    // Write names into columns D & E of main sheet
+    // Paste door names into D & E
     for (let j = 0; j < doorNames.length; j++) {
       const rowNum = j + 4;
       const row = sheet.getRow(rowNum);
@@ -91,7 +103,6 @@ export default async function handler(req, res) {
       const nameNew = `${d} ${e}`.trim();
 
       if (!nameOld && nameNew) {
-        // New name → highlight yellow
         row.getCell(4).fill = row.getCell(5).fill = {
           type: "pattern",
           pattern: "solid",
@@ -100,7 +111,6 @@ export default async function handler(req, res) {
       }
 
       if (nameOld && !nameNew) {
-        // Removed name → highlight red in A & B
         row.getCell(1).fill = row.getCell(2).fill = {
           type: "pattern",
           pattern: "solid",
