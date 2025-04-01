@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
   for (const key of doorKeys) {
     const { buffer, filename } = buffers[key];
-    if (filename.endsWith(".csv")) {
+    if (filename.toLowerCase().endsWith(".csv")) {
       const csv = buffer.toString("utf-8");
       const records = parse(csv, { skip_empty_lines: true });
       const names = records.map(([last, first]) => ({ last, first }));
