@@ -1,4 +1,4 @@
-// /api/compare.js (Vercel serverless function, supports xlsx and csv)
+// /api/compare.js (Vercel serverless function, supports xlsx and csv with improved detection)
 import Busboy from "busboy";
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       file.on("end", () => {
         buffers[fieldname] = {
           buffer: Buffer.concat(chunks),
-          filename,
+          filename: filename || '',
         };
       });
     });
@@ -43,7 +43,11 @@ export default async function handler(req, res) {
   const doorDataList = [];
 
   for (const key of doorKeys) {
-    const { buffer, filename } = buffers[key];
+    const fileData = buffers[key];
+    const buffer = fileData.buffer;
+    const filename = fileData.filename || '';
+    console.log(`Processing ${key}: ${filename}`);
+
     if (filename.toLowerCase().endsWith(".csv")) {
       const csv = buffer.toString("utf-8");
       const records = parse(csv, { skip_empty_lines: true });
