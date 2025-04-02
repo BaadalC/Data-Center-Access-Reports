@@ -1,5 +1,7 @@
+
 import Busboy from "busboy";
 import ExcelJS from "exceljs";
+import csvParser from "csv-parser";
 import { Readable } from "stream";
 
 export const config = {
@@ -13,11 +15,11 @@ export default async function handler(req, res) {
     return res.status(405).send("Method not allowed");
   }
 
-  try {
-    const buffers = {};
-    const busboy = Busboy({ headers: req.headers });
+  const buffers = {};
+  const busboy = Busboy({ headers: req.headers });
 
-    const parseForm = new Promise((resolve, reject) => {
+  const parseForm = () =>
+    new Promise((resolve, reject) => {
       busboy.on("file", (fieldname, file) => {
         const chunks = [];
         file.on("data", (data) => chunks.push(data));
@@ -28,63 +30,110 @@ export default async function handler(req, res) {
 
       busboy.on("finish", () => resolve());
       busboy.on("error", reject);
+
+      req.pipe(busboy);
     });
 
-    req.pipe(busboy);
+  try {
     await parseForm();
 
-    // Parse the main Excel file
-    const mainWorkbook = new ExcelJS.Workbook();
-    await mainWorkbook.xlsx.load(buffers.mainFile);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffers["mainFile"]);
 
-    // Load reference files (CSV)
-    const referenceFiles = {};
-    for (const key of Object.keys(buffers)) {
-      if (key.startsWith("door")) {
-        referenceFiles[key] = buffers[key].toString("utf8").split("\n").map(line => line.trim().split(","));
+    for (let door = 470; door <= 477; door++) {
+      const tabName = "Door " + door;
+      const sheet = workbook.getWorksheet(tabName);
+      const csvBuffer = buffers[`door${door}`];
+
+      if (!sheet || !csvBuffer) continue;
+
+      // Step 1: Delete columns A-C (1-3) from row 4 down
+      const lastRow = sheet.lastRow.number;
+      for (let i = 4; i <= lastRow; i++) {
+        sheet.getRow(i).splice(1, 3);
+      }
+
+      // Step 2: Delete blank rows in A & B
+      for (let i = lastRow; i >= 4; i--) {
+        const row = sheet.getRow(i);
+        if (!row.getCell(1).value && !row.getCell(2).value) {
+          sheet.spliceRows(i, 1);
+        }
+      }
+
+      // Step 3: Parse reference CSV and store names
+      const newEntries = [];
+      await new Promise((resolve, reject) => {
+        Readable.from(csvBuffer)
+          .pipe(csvParser())
+          .on("data", (row) => {
+            newEntries.push({
+              lastName: row[Object.keys(row)[0]]?.trim(),
+              firstName: row[Object.keys(row)[1]]?.trim(),
+            });
+          })
+          .on("end", resolve)
+          .on("error", reject);
+      });
+
+      // Sort entries
+      newEntries.sort((a, b) => {
+        const aName = `${a.lastName} ${a.firstName}`;
+        const bName = `${b.lastName} ${b.firstName}`;
+        return aName.localeCompare(bName);
+      });
+
+      // Insert into D & E
+      for (let i = 0; i < newEntries.length; i++) {
+        const rowIndex = i + 4;
+        const row = sheet.getRow(rowIndex);
+        row.getCell(4).value = newEntries[i].lastName || "";
+        row.getCell(5).value = newEntries[i].firstName || "";
+        row.commit();
+      }
+
+      // Highlight logic
+      const maxLen = Math.max(sheet.rowCount - 3, newEntries.length);
+      for (let i = 0; i < maxLen; i++) {
+        const rowIndex = i + 4;
+        const row = sheet.getRow(rowIndex);
+        const oldName = `${row.getCell(1).value || ""} ${row.getCell(2).value || ""}`.trim();
+        const newName = `${row.getCell(4).value || ""} ${row.getCell(5).value || ""}`.trim();
+
+        if (oldName && !newName) {
+          // Access removed (RED)
+          row.getCell(1).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFF0000" },
+          };
+          row.getCell(2).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFF0000" },
+          };
+        } else if (!oldName && newName) {
+          // Access added (YELLOW)
+          row.getCell(4).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFFF00" },
+          };
+          row.getCell(5).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFFF00" },
+          };
+        }
       }
     }
 
-    // We'll process only Door 470 for now
-    const sheet = mainWorkbook.getWorksheet("Door 470");
-    if (!sheet) throw new Error("Sheet 'Door 470' not found in main Excel file");
-
-    // Remove columns A to C (from row 4 onward)
-    for (let i = sheet.actualRowCount; i >= 4; i--) {
-      sheet.getRow(i).splice(1, 3); // A to C is 1 to 3
-    }
-
-    // Clean up empty rows in col A & B
-    for (let i = sheet.actualRowCount; i >= 4; i--) {
-      const row = sheet.getRow(i);
-      const valA = row.getCell(1).value;
-      const valB = row.getCell(2).value;
-      if (!valA && !valB) {
-        sheet.spliceRows(i, 1);
-      }
-    }
-
-    // Paste reference CSV to col D & E (starting row 4)
-    const ref = referenceFiles["door470"];
-    if (!ref) throw new Error("CSV for Door 470 not found");
-
-    for (let i = 0; i < ref.length; i++) {
-      const row = sheet.getRow(i + 4);
-      if (!row) continue;
-      row.getCell(4).value = ref[i][0]; // Last name
-      row.getCell(5).value = ref[i][1]; // First name
-    }
-
-    // TODO: highlight new names & align missing (will do this next)
-    
-    // Send back the Excel
-    const buffer = await mainWorkbook.xlsx.writeBuffer();
+    const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader("Content-Disposition", "attachment; filename=highlighted.xlsx");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.send(buffer);
-
+    res.status(200).send(buffer);
   } catch (err) {
-    console.error("💥 Error in compare API:", err);
+    console.error("Error:", err);
     res.status(500).send("Internal Server Error: " + err.message);
   }
 }
