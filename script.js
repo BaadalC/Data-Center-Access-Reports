@@ -1,157 +1,129 @@
-document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+document.getElementById("uploadForm").addEventListener("submit", function (e) {
   e.preventDefault();
-  const statusDiv = document.getElementById("status");
-  statusDiv.innerHTML = "Processing...";
 
-  try {
-    const mainFile = document.getElementById("mainFile").files[0];
-    if (!mainFile) throw new Error("Main Excel file not uploaded.");
+  const status = document.getElementById("status");
+  status.textContent = "Processing...";
 
-    const doorFiles = {};
-    document.querySelectorAll(".doorFile").forEach((input) => {
-      const door = input.dataset.door;
-      if (input.files.length > 0) {
-        doorFiles[door] = input.files[0];
-      }
-    });
+  const mainFile = document.getElementById("mainFile").files[0];
+  const doorFiles = document.querySelectorAll(".doorFile");
 
-    const mainWorkbook = await readExcelFile(mainFile);
-    for (const [door, file] of Object.entries(doorFiles)) {
-      const csvData = await readCSVFile(file);
-      processTab(mainWorkbook, door, csvData);
-    }
-
-    const outFile = XLSX.write(mainWorkbook, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([outFile], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Updated_Access_Report.xlsx";
-    a.click();
-
-    statusDiv.innerHTML = "✅ Done!";
-  } catch (err) {
-    console.error(err);
-    statusDiv.innerHTML = "❌ Something went wrong.";
+  if (!mainFile) {
+    status.textContent = "Please upload the main working Excel file.";
+    return;
   }
-});
 
-function readExcelFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  const reader = new FileReader();
+
+  reader.onload = async function (e) {
+    try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
-      resolve(workbook);
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
-}
 
-function readCSVFile(file) {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      complete: (results) => {
-        resolve(results.data.filter(row => row[0] && row[1]));
-      },
-      error: reject
-    });
-  });
-}
+      // Loop through door files and corresponding workbook sheets
+      for (let doorInput of doorFiles) {
+        const doorNumber = doorInput.getAttribute("data-door");
+        const doorFile = doorInput.files[0];
+        if (!doorFile) continue;
 
-function processTab(workbook, door, csvData) {
-  const sheetName = workbook.SheetNames.find(name => name.includes(door));
-  if (!sheetName) return;
+        const sheetName = `Door ${doorNumber}`;
+        const worksheet = workbook.Sheets[sheetName];
 
-  const sheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (!worksheet) {
+          console.warn(`Sheet "${sheetName}" not found in Excel.`);
+          continue;
+        }
 
-  // Step 1: Clear columns A–C from row 4 downward and shift left
-  data.splice(3, data.length - 3); // Remove old A–C content
-  for (let i = 3; i < data.length; i++) {
-    data[i].splice(0, 3);
-  }
+        // Parse CSV
+        const csvText = await doorFile.text();
+        const csvData = XLSX.read(csvText, { type: "string" });
+        const csvSheet = csvData.Sheets[csvData.SheetNames[0]];
+        const csvJson = XLSX.utils.sheet_to_json(csvSheet, { header: 1 });
 
-  // Step 2: Remove empty rows
-  const filtered = data.slice(0, 3).concat(
-    data.slice(3).filter(row => row[0] && row[1])
-  );
+        const csvNames = csvJson.slice(1).map((row) => ({
+          last: (row[0] || "").toString().trim(),
+          first: (row[1] || "").toString().trim(),
+        }));
 
-  // Step 3: Clean any leftover in columns F–J from row 4 down
-  for (let i = 3; i < filtered.length; i++) {
-    for (let col = 5; col <= 9; col++) {
-      filtered[i][col] = "";
-    }
-  }
+        // Clean up existing content from columns A–C (leave rows 1–3 alone)
+        const sheetJson = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const cleanedRows = sheetJson.map((row, i) =>
+          i <= 2 ? row : row.slice(3)
+        );
 
-  // Step 4: Paste new CSV data into col D/E from row 4
-  const leftSide = filtered.slice(3).map(r => [r[0], r[1]]);
-  const rightSideRaw = csvData.map(r => [r[0].trim(), r[1].trim()]);
+        // Remove empty rows after cleaning
+        const filteredRows = cleanedRows.filter((row, i) =>
+          i <= 2 ? true : row[0] || row[1]
+        );
 
-  // Remove duplicates in right side
-  const uniqueRightSide = [];
-  const seen = new Set();
-  for (const [ln, fn] of rightSideRaw) {
-    const key = `${ln},${fn}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueRightSide.push([ln, fn]);
-    }
-  }
+        // Add CSV data into columns D and E, starting at row 4
+        for (let i = 0; i < csvNames.length; i++) {
+          const targetRow = filteredRows[i + 3] || [];
+          targetRow[3] = csvNames[i].last;
+          targetRow[4] = csvNames[i].first;
+          filteredRows[i + 3] = targetRow;
+        }
 
-  // Step 5: Align both sides
-  const aligned = [];
-  let i = 0, j = 0;
-  while (i < leftSide.length || j < uniqueRightSide.length) {
-    const left = leftSide[i] || ["", ""];
-    const right = uniqueRightSide[j] || ["", ""];
+        // Align names and insert blanks where needed
+        const alignedRows = alignRows(filteredRows);
 
-    if (left[0] === right[0] && left[1] === right[1]) {
-      aligned.push([left[0], left[1], "", right[0], right[1]]);
-      i++; j++;
-    } else {
-      const lStr = `${left[0]} ${left[1]}`.toLowerCase();
-      const rStr = `${right[0]} ${right[1]}`.toLowerCase();
+        // Clear F–J from row 4 onward
+        for (let i = 3; i < alignedRows.length; i++) {
+          alignedRows[i][5] = "";
+          alignedRows[i][6] = "";
+          alignedRows[i][7] = "";
+          alignedRows[i][8] = "";
+          alignedRows[i][9] = "";
+        }
 
-      if (!left[0] && right[0]) {
-        aligned.push(["", "", "", right[0], right[1]]);
-        j++;
-      } else if (!right[0] && left[0]) {
-        aligned.push([left[0], left[1], "", "", ""]);
-        i++;
-      } else if (lStr < rStr) {
-        aligned.push([left[0], left[1], "", "", ""]);
-        i++;
-      } else {
-        aligned.push(["", "", "", right[0], right[1]]);
-        j++;
+        // Write back to worksheet
+        const updatedSheet = XLSX.utils.aoa_to_sheet(alignedRows);
+        workbook.Sheets[sheetName] = updatedSheet;
       }
+
+      // Generate downloadable file
+      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "Updated_Access_Report.xlsx";
+      link.click();
+
+      status.textContent = "✅ Done! File downloaded.";
+    } catch (err) {
+      console.error(err);
+      status.textContent = "❌ Something went wrong.";
+    }
+  };
+
+  reader.readAsArrayBuffer(mainFile);
+});
+
+// Alignment helper (you can customize this further)
+function alignRows(rows) {
+  const result = [rows[0], rows[1], rows[2]];
+
+  let i = 3;
+  while (i < rows.length) {
+    const row = rows[i];
+    const left = `${row[0] || ""} ${row[1] || ""}`.trim().toLowerCase();
+    const right = `${row[3] || ""} ${row[4] || ""}`.trim().toLowerCase();
+
+    if (left === right) {
+      result.push(row);
+      i++;
+    } else {
+      const nextRight = (rows[i + 1] || []);
+      const nextRightName = `${nextRight[3] || ""} ${nextRight[4] || ""}`.trim().toLowerCase();
+      if (left === nextRightName) {
+        // New name added in right, insert blank in A/B
+        result.push(["", "", ...(row.slice(2))]);
+      } else {
+        // Name removed, insert blank in D/E
+        result.push([...(row.slice(0, 2)), "", "", ...(row.slice(5))]);
+      }
+      i++;
     }
   }
 
-  // Step 6: Highlight mismatches
-  const ws = XLSX.utils.aoa_to_sheet(filtered.slice(0, 3).concat(aligned));
-  const range = XLSX.utils.decode_range(ws["!ref"]);
-
-  for (let row = 4; row <= range.e.r + 1; row++) {
-    const leftL = ws[`A${row}`]?.v;
-    const leftF = ws[`B${row}`]?.v;
-    const rightL = ws[`D${row}`]?.v;
-    const rightF = ws[`E${row}`]?.v;
-
-    if (!leftL && rightL) {
-      ws[`D${row}`].s = ws[`E${row}`].s = {
-        fill: { fgColor: { rgb: "FFFF00" } },
-      };
-    } else if (leftL && !rightL) {
-      ws[`A${row}`].s = ws[`B${row}`].s = {
-        fill: { fgColor: { rgb: "FFFF00" } },
-      };
-    }
-  }
-
-  ws["!cols"] = [];
-  workbook.Sheets[sheetName] = ws;
+  return result;
 }
