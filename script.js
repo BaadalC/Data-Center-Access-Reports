@@ -1,114 +1,129 @@
-document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+document.getElementById("uploadForm").addEventListener("submit", function (e) {
   e.preventDefault();
-  const statusDiv = document.getElementById("status");
-  statusDiv.textContent = "Processing...";
+
+  const status = document.getElementById("status");
+  status.textContent = "Processing...";
 
   const mainFile = document.getElementById("mainFile").files[0];
-  const doorFiles = Array.from(document.getElementsByClassName("doorFile"));
+  const doorFiles = document.querySelectorAll(".doorFile");
 
-  if (!mainFile || doorFiles.length !== 6) {
-    statusDiv.textContent = "Please upload all required files.";
+  if (!mainFile) {
+    status.textContent = "Please upload the main working Excel file.";
     return;
   }
 
-  const doorMap = {};
-  for (const fileInput of doorFiles) {
-    const door = fileInput.dataset.door;
-    doorMap[door] = fileInput.files[0];
-  }
+  const reader = new FileReader();
 
-  try {
-    const workbook = XLSX.read(await mainFile.arrayBuffer(), { type: "buffer" });
-    const doorNumbers = Object.keys(doorMap);
+  reader.onload = async function (e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
 
-    for (let i = 0; i < doorNumbers.length; i++) {
-      const door = doorNumbers[i];
-      const csvFile = doorMap[door];
-      const csvText = await csvFile.text();
-      const parsed = Papa.parse(csvText.trim(), { header: false }).data;
-      const csvNames = parsed
-        .slice(1) // skip header
-        .filter(row => row[0] || row[1])
-        .map(row => [row[0]?.trim().toLowerCase() || "", row[1]?.trim().toLowerCase() || ""]);
+      // Loop through door files and corresponding workbook sheets
+      for (let doorInput of doorFiles) {
+        const doorNumber = doorInput.getAttribute("data-door");
+        const doorFile = doorInput.files[0];
+        if (!doorFile) continue;
 
-      const sheetName = workbook.SheetNames[i];
-      const sheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const sheetName = `Door ${doorNumber}`;
+        const worksheet = workbook.Sheets[sheetName];
 
-      const headerRows = data.slice(0, 3);
-      let working = data.slice(3)
-        .map(r => r.slice(0, 5).concat(["", "", "", "", ""])); // clear F–J
-      working.forEach(r => {
-        r[0] = ""; r[1] = ""; r[2] = ""; // clear A–C
-      });
-
-      const originalNames = data.slice(3).map(r => [
-        r[3]?.toString().trim().toLowerCase() || "",
-        r[4]?.toString().trim().toLowerCase() || "",
-      ]).filter(r => r[0] || r[1]);
-
-      const aligned = alignAndCompare(originalNames, csvNames);
-      const finalRows = aligned.map(({ left, right, status }) => {
-        const row = [
-          left[0] || "",
-          left[1] || "",
-          "",
-          right[0] || "",
-          right[1] || "",
-          "", "", "", "", "",
-        ];
-
-        if (status === "added") {
-          row[3] = { v: row[3], s: { fill: { fgColor: { rgb: "FFFF00" } } } };
-          row[4] = { v: row[4], s: { fill: { fgColor: { rgb: "FFFF00" } } } };
-        } else if (status === "removed") {
-          row[0] = { v: row[0], s: { fill: { fgColor: { rgb: "FF0000" } } } };
-          row[1] = { v: row[1], s: { fill: { fgColor: { rgb: "FF0000" } } } };
+        if (!worksheet) {
+          console.warn(`Sheet "${sheetName}" not found in Excel.`);
+          continue;
         }
 
-        return row;
-      });
+        // Parse CSV
+        const csvText = await doorFile.text();
+        const csvData = XLSX.read(csvText, { type: "string" });
+        const csvSheet = csvData.Sheets[csvData.SheetNames[0]];
+        const csvJson = XLSX.utils.sheet_to_json(csvSheet, { header: 1 });
 
-      const sheetOutput = XLSX.utils.aoa_to_sheet([...headerRows, ...finalRows]);
-      workbook.Sheets[sheetName] = sheetOutput;
+        const csvNames = csvJson.slice(1).map((row) => ({
+          last: (row[0] || "").toString().trim(),
+          first: (row[1] || "").toString().trim(),
+        }));
+
+        // Clean up existing content from columns A–C (leave rows 1–3 alone)
+        const sheetJson = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const cleanedRows = sheetJson.map((row, i) =>
+          i <= 2 ? row : row.slice(3)
+        );
+
+        // Remove empty rows after cleaning
+        const filteredRows = cleanedRows.filter((row, i) =>
+          i <= 2 ? true : row[0] || row[1]
+        );
+
+        // Add CSV data into columns D and E, starting at row 4
+        for (let i = 0; i < csvNames.length; i++) {
+          const targetRow = filteredRows[i + 3] || [];
+          targetRow[3] = csvNames[i].last;
+          targetRow[4] = csvNames[i].first;
+          filteredRows[i + 3] = targetRow;
+        }
+
+        // Align names and insert blanks where needed
+        const alignedRows = alignRows(filteredRows);
+
+        // Clear F–J from row 4 onward
+        for (let i = 3; i < alignedRows.length; i++) {
+          alignedRows[i][5] = "";
+          alignedRows[i][6] = "";
+          alignedRows[i][7] = "";
+          alignedRows[i][8] = "";
+          alignedRows[i][9] = "";
+        }
+
+        // Write back to worksheet
+        const updatedSheet = XLSX.utils.aoa_to_sheet(alignedRows);
+        workbook.Sheets[sheetName] = updatedSheet;
+      }
+
+      // Generate downloadable file
+      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "Updated_Access_Report.xlsx";
+      link.click();
+
+      status.textContent = "✅ Done! File downloaded.";
+    } catch (err) {
+      console.error(err);
+      status.textContent = "❌ Something went wrong.";
     }
+  };
 
-    const outputBlob = XLSX.write(workbook, { type: "blob", bookType: "xlsx" });
-    const url = URL.createObjectURL(outputBlob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "highlighted_access_report.xlsx";
-    link.click();
-
-    statusDiv.textContent = "✅ Report generated successfully!";
-  } catch (err) {
-    console.error(err);
-    statusDiv.textContent = "❌ Something went wrong.";
-  }
+  reader.readAsArrayBuffer(mainFile);
 });
 
-function alignAndCompare(original, incoming) {
-  const aligned = [];
-  let i = 0, j = 0;
+// Alignment helper (you can customize this further)
+function alignRows(rows) {
+  const result = [rows[0], rows[1], rows[2]];
 
-  while (i < original.length || j < incoming.length) {
-    const left = i < original.length ? original[i] : ["", ""];
-    const right = j < incoming.length ? incoming[j] : ["", ""];
+  let i = 3;
+  while (i < rows.length) {
+    const row = rows[i];
+    const left = `${row[0] || ""} ${row[1] || ""}`.trim().toLowerCase();
+    const right = `${row[3] || ""} ${row[4] || ""}`.trim().toLowerCase();
 
-    if (left[0] === right[0] && left[1] === right[1]) {
-      aligned.push({ left, right, status: "same" });
-      i++; j++;
-    } else if (
-      left[0] < right[0] || 
-      (left[0] === right[0] && left[1] < right[1])
-    ) {
-      aligned.push({ left, right: ["", ""], status: "removed" });
+    if (left === right) {
+      result.push(row);
       i++;
     } else {
-      aligned.push({ left: ["", ""], right, status: "added" });
-      j++;
+      const nextRight = (rows[i + 1] || []);
+      const nextRightName = `${nextRight[3] || ""} ${nextRight[4] || ""}`.trim().toLowerCase();
+      if (left === nextRightName) {
+        // New name added in right, insert blank in A/B
+        result.push(["", "", ...(row.slice(2))]);
+      } else {
+        // Name removed, insert blank in D/E
+        result.push([...(row.slice(0, 2)), "", "", ...(row.slice(5))]);
+      }
+      i++;
     }
   }
 
-  return aligned;
+  return result;
 }
