@@ -1,169 +1,104 @@
+import { read, utils, writeFile } from "xlsx";
 
-import Busboy from "busboy";
-import ExcelJS from "exceljs";
-import { Readable } from "stream";
-import csvParser from "csv-parser";
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-function parseCSV(buffer) {
-  return new Promise((resolve, reject) => {
-    const rows = [];
-    Readable.from(buffer.toString())
-      .pipe(csvParser())
-      .on("data", (row) => rows.push(row))
-      .on("end", () => resolve(rows))
-      .on("error", reject);
-  });
+function normalizeName(name) {
+  return name ? name.toString().trim().toLowerCase() : "";
 }
 
-function formatName(row, col1, col2) {
-  const first = (row.getCell(col1).value || "").toString().trim().toLowerCase();
-  const last = (row.getCell(col2).value || "").toString().trim().toLowerCase();
-  return `${first} ${last}`.trim();
-}
+function alignAndCompare(original, csvData) {
+  const originalClean = original
+    .filter(row => normalizeName(row[0]) || normalizeName(row[1]))
+    .map(row => [normalizeName(row[0]), normalizeName(row[1])]);
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).send("Method not allowed");
+  const csvClean = csvData
+    .filter(row => normalizeName(row[0]) || normalizeName(row[1]))
+    .map(row => [normalizeName(row[0]), normalizeName(row[1])]);
+
+  let i = 0, j = 0;
+  const result = [];
+
+  while (i < originalClean.length || j < csvClean.length) {
+    const left = i < originalClean.length ? originalClean[i] : ["", ""];
+    const right = j < csvClean.length ? csvClean[j] : ["", ""];
+
+    if (left[0] === right[0] && left[1] === right[1]) {
+      result.push({ left, right, status: "same" });
+      i++; j++;
+    } else if (
+      left[0] < right[0] || 
+      (left[0] === right[0] && left[1] < right[1])
+    ) {
+      result.push({ left, right: ["", ""], status: "removed" });
+      i++;
+    } else {
+      result.push({ left: ["", ""], right, status: "added" });
+      j++;
+    }
   }
 
-  const buffers = {};
-  const busboy = Busboy({ headers: req.headers });
+  return result;
+}
 
-  const parseForm = () =>
-    new Promise((resolve, reject) => {
-      busboy.on("file", (fieldname, file) => {
-        const chunks = [];
-        file.on("data", (data) => chunks.push(data));
-        file.on("end", () => {
-          buffers[fieldname] = Buffer.concat(chunks);
-        });
-      });
+export async function processExcel(mainFile, doorCSVs) {
+  const mainWorkbook = read(await mainFile.arrayBuffer(), { type: "buffer" });
 
-      busboy.on("finish", resolve);
-      busboy.on("error", reject);
-      req.pipe(busboy);
+  const csvBuffers = await Promise.all(
+    doorCSVs.map(file => file.arrayBuffer())
+  );
+  const csvWorksheets = csvBuffers.map(buffer =>
+    utils.sheet_to_json(read(buffer, { type: "buffer", raw: false }).Sheets.Sheet1, {
+      header: 1,
+      blankrows: false,
+    })
+  );
+
+  doorCSVs.forEach((file, idx) => {
+    const sheetName = mainWorkbook.SheetNames[idx];
+    const sheet = mainWorkbook.Sheets[sheetName];
+    const sheetData = utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+
+    const headers = sheetData.slice(0, 3);
+    let workingData = sheetData.slice(3);
+
+    // Remove extra columns (F–J) and highlights
+    workingData = workingData.map(row => {
+      for (let i = 5; i < 10; i++) row[i] = "";
+      return row.slice(0, 5);
     });
 
-  await parseForm();
+    // Clear columns A–C from row 4
+    workingData = workingData.map(row => ["", "", "", row[3] || "", row[4] || ""]);
 
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffers["mainFile"]);
+    // Align names
+    const aligned = alignAndCompare(workingData.map(r => [r[0], r[1]]), csvWorksheets[idx]);
 
-  const doors = ["470", "471", "473", "474", "476", "477"];
+    const updated = aligned.map(item => {
+      const row = [
+        item.left[0] || "",
+        item.left[1] || "",
+        "", // Column C left blank
+        item.right[0] || "",
+        item.right[1] || "",
+      ];
 
-  for (const door of doors) {
-    const sheetName = `Door ${door}`;
-    const csvBuffer = buffers[`door${door}`];
-    const sheet = workbook.getWorksheet(sheetName);
-    if (!csvBuffer || !sheet) continue;
-
-    // Step 1: Remove columns A–C from row 4 onward and shift left
-    for (let i = 4; i <= sheet.rowCount; i++) {
-      sheet.spliceColumns(1, 3);
-    }
-
-    // Step 2: Remove leftover highlights and extra values like "approved"
-    for (let i = 4; i <= sheet.rowCount; i++) {
-      const row = sheet.getRow(i);
-      row.eachCell((cell, colNumber) => {
-        if (typeof cell.value === "string" && cell.value.toLowerCase().includes("approved")) {
-          cell.value = null;
-        }
-        if (cell.fill) {
-          cell.fill = null;
-        }
-      });
-    }
-
-    // Step 3: Remove empty rows in A/B
-    for (let i = sheet.rowCount; i >= 4; i--) {
-      const row = sheet.getRow(i);
-      if (!row.getCell(1).value && !row.getCell(2).value) {
-        sheet.spliceRows(i, 1);
-      }
-    }
-
-    // Step 4: Parse CSV and paste into columns D & E from row 4
-    const csvRows = await parseCSV(csvBuffer);
-    const csvData = csvRows.map((r) => [Object.values(r)[0], Object.values(r)[1]]);
-
-    let insertRow = 4;
-    for (const [last, first] of csvData) {
-      const row = sheet.getRow(insertRow++);
-      row.getCell(4).value = last;
-      row.getCell(5).value = first;
-    }
-
-    // Step 5: Align rows by inserting blanks when names don't match
-    let i = 4;
-    while (i <= sheet.rowCount) {
-      const oldName = formatName(sheet.getRow(i), 1, 2);
-      const newName = formatName(sheet.getRow(i), 4, 5);
-
-      if (oldName && newName && oldName === newName) {
-        i++;
-        continue;
+      if (item.status === "added") {
+        row.push({ s: { fill: { fgColor: { rgb: "FFFF00" } } } }); // yellow
+      } else if (item.status === "removed") {
+        row[0] = { v: row[0], s: { fill: { fgColor: { rgb: "FF0000" } } } };
+        row[1] = { v: row[1], s: { fill: { fgColor: { rgb: "FF0000" } } } };
       }
 
-      if (!oldName && newName) {
-        // New name added
-        sheet.getRow(i).getCell(4).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFFFF00" },
-        };
-        sheet.getRow(i).getCell(5).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFFFF00" },
-        };
-        i++;
-        continue;
-      }
+      return row;
+    });
 
-      if (oldName && !newName) {
-        // Access removed
-        sheet.getRow(i).getCell(1).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFF0000" },
-        };
-        sheet.getRow(i).getCell(2).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFF0000" },
-        };
-        i++;
-        continue;
-      }
+    const finalData = [...headers, ...updated];
+    const newSheet = utils.aoa_to_sheet(finalData);
+    mainWorkbook.Sheets[sheetName] = newSheet;
+  });
 
-      const rightNames = formatName(sheet.getRow(i + 1), 4, 5);
-      const leftNames = formatName(sheet.getRow(i + 1), 1, 2);
+  const outputBlob = writeFile(mainWorkbook, "highlighted_result.xlsx", {
+    bookType: "xlsx",
+    type: "binary",
+  });
 
-      if (oldName && newName && oldName !== newName) {
-        if (newName === formatName(sheet.getRow(i + 1), 1, 2)) {
-          // Insert blank row in A/B
-          sheet.spliceRows(i, 0, []);
-        } else if (oldName === formatName(sheet.getRow(i + 1), 4, 5)) {
-          // Insert blank row in D/E
-          sheet.spliceRows(i, 0, []);
-        } else {
-          i++;
-        }
-      } else {
-        i++;
-      }
-    }
-  }
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  res.setHeader("Content-Disposition", "attachment; filename=highlighted.xlsx");
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.send(buffer);
+  return outputBlob;
 }
