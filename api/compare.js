@@ -1,11 +1,24 @@
 import Busboy from "busboy";
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
+import * as XLSX from "xlsx";
 
 export const config = {
   api: {
     bodyParser: false,
   },
+};
+
+const yellowFill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFFF00" },
+};
+
+const redFill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FF0000" },
 };
 
 export default async function handler(req, res) {
@@ -29,87 +42,92 @@ export default async function handler(req, res) {
     req.pipe(busboy);
   });
 
-  await parseForm;
+  await parseForm();
 
   const mainWorkbook = new ExcelJS.Workbook();
-  const mainFileBuffer = buffers["mainFile"];
-  const isMainCsv = mainFileBuffer.toString("utf8").startsWith("First Name") || mainFileBuffer.toString("utf8").startsWith('"First Name"');
-  await (isMainCsv
-    ? mainWorkbook.csv.read(Readable.from(mainFileBuffer))
-    : mainWorkbook.xlsx.load(mainFileBuffer));
-
+  await mainWorkbook.xlsx.load(buffers["mainFile"]);
   const newWorkbook = new ExcelJS.Workbook();
 
   for (const field in buffers) {
     if (field === "mainFile") continue;
 
     const doorNumber = field.replace("door", "");
-    const referenceBuffer = buffers[field];
-
-    const referenceWorkbook = new ExcelJS.Workbook();
-    await referenceWorkbook.csv.read(Readable.from(referenceBuffer));
-    const referenceSheet = referenceWorkbook.worksheets[0];
-
     const tabName = `Door ${doorNumber}`;
-    const mainSheet = mainWorkbook.getWorksheet(tabName);
-    if (!mainSheet) continue;
+    const sheet = mainWorkbook.getWorksheet(tabName);
+    if (!sheet) continue;
 
-    const newSheet = newWorkbook.addWorksheet(tabName);
-
-    // Copy headers (first 3 rows)
-    for (let i = 1; i <= 3; i++) {
-      const row = mainSheet.getRow(i);
-      newSheet.addRow(row.values);
+    // Delete cols A-C from row 4 down
+    for (let row = 4; row <= sheet.rowCount; row++) {
+      for (let col = 1; col <= 3; col++) {
+        sheet.getCell(row, col).value = null;
+      }
     }
 
-    const oldNames = new Set();
-    mainSheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 3 && row.getCell(1).value && row.getCell(2).value) {
-        oldNames.add(`${row.getCell(1).value} ${row.getCell(2).value}`);
+    // Shift D/E into A/B
+    for (let row = 4; row <= sheet.rowCount; row++) {
+      sheet.getCell(row, 1).value = sheet.getCell(row, 4).value;
+      sheet.getCell(row, 2).value = sheet.getCell(row, 5).value;
+      sheet.getCell(row, 4).value = null;
+      sheet.getCell(row, 5).value = null;
+    }
+
+    // Delete rows with blank A/B
+    let row = 4;
+    while (row <= sheet.rowCount) {
+      const last = sheet.getCell(row, 1).value;
+      const first = sheet.getCell(row, 2).value;
+      if (!last && !first) {
+        sheet.spliceRows(row, 1);
+      } else {
+        row++;
       }
+    }
+
+    // Parse new CSV
+    const csv = XLSX.read(buffers[field], { type: "buffer" });
+    const csvSheet = csv.Sheets[csv.SheetNames[0]];
+    const csvJson = XLSX.utils.sheet_to_json(csvSheet, { header: 1 });
+    const csvNames = csvJson.map((row) => [row[0], row[1]]).filter(r => r[0] || r[1]);
+
+    // Paste into D/E starting row 4
+    csvNames.forEach(([last, first], i) => {
+      sheet.getCell(i + 4, 4).value = last;
+      sheet.getCell(i + 4, 5).value = first;
     });
 
-    const newNames = new Set();
-    referenceSheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
-      if (row.getCell(1).value && row.getCell(2).value) {
-        newNames.add(`${row.getCell(1).value} ${row.getCell(2).value}`);
-      }
-    });
+    // Align and highlight
+    const maxLen = Math.max(sheet.rowCount - 3, csvNames.length);
+    for (let i = 0; i < maxLen; i++) {
+      const rowNum = i + 4;
+      const oldLast = sheet.getCell(rowNum, 1).value;
+      const oldFirst = sheet.getCell(rowNum, 2).value;
+      const newLast = sheet.getCell(rowNum, 4).value;
+      const newFirst = sheet.getCell(rowNum, 5).value;
 
-    // Highlight additions
-    referenceSheet.eachRow((row, rowNumber) => {
-      const newRow = [];
-      row.eachCell(cell => newRow.push(cell.value));
-      const fullName = `${row.getCell(1).value} ${row.getCell(2).value}`;
-      const excelRow = newSheet.addRow(newRow);
-      if (!oldNames.has(fullName)) {
-        excelRow.eachCell(cell => {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFF00" },
-          };
-        });
-      }
-    });
+      const oldFull = `${oldLast || ""},${oldFirst || ""}`;
+      const newFull = `${newLast || ""},${newFirst || ""}`;
 
-    // Highlight removals
-    mainSheet.eachRow((row, rowNumber) => {
-      if (rowNumber <= 3) return;
-      const fullName = `${row.getCell(1).value} ${row.getCell(2).value}`;
-      if (!newNames.has(fullName)) {
-        const values = [];
-        row.eachCell(cell => values.push(cell.value));
-        const removedRow = newSheet.addRow(values);
-        removedRow.eachCell(cell => {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FF0000" },
-          };
-        });
+      if (oldFull !== newFull) {
+        if (newLast || newFirst) {
+          sheet.getCell(rowNum, 4).fill = yellowFill;
+          sheet.getCell(rowNum, 5).fill = yellowFill;
+        }
+        if (oldLast || oldFirst) {
+          sheet.getCell(rowNum, 1).fill = redFill;
+          sheet.getCell(rowNum, 2).fill = redFill;
+        }
       }
+    }
+
+    // Add updated sheet to output workbook
+    const newSheet = newWorkbook.addWorksheet(tabName);
+    sheet.eachRow({ includeEmpty: true }, (row, rowNum) => {
+      const newRow = newSheet.getRow(rowNum);
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        newRow.getCell(colNum).value = cell.value;
+        if (cell.fill) newRow.getCell(colNum).fill = cell.fill;
+      });
+      newRow.commit();
     });
   }
 
