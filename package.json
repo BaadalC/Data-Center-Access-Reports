@@ -1,9 +1,0 @@
-{
-  "name": "data-center-access-reports",
-  "version": "1.0.0",
-  "dependencies": {
-    "exceljs": "^4.4.0",
-    "formidable": "^3.5.0",
-    "csv-parser": "^3.0.0"
-  }
-}

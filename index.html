@@ -9,35 +9,36 @@
   <h2>Access Report Comparator</h2>
 
   <form id="uploadForm">
-    <h3>Upload Main Working Sheet (Tabs: Door 470–477)</h3>
-    <label>Main Working Excel File:</label>
-    <input type="file" id="mainFile" accept=".csv, .xlsx" required /><br><br>
+    <h3>Upload Main Working Sheet (Excel)</h3>
+    <input type="file" id="mainFile" accept=".xlsx" required /><br><br>
 
-    <h3>Upload Reference Files (CSV for Each Door)</h3>
-
+    <h3>Upload Reference Files (CSV - One for Each Door)</h3>
     <label>Door 470:</label>
-    <input type="file" id="door470" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="470" accept=".csv" required /><br><br>
 
     <label>Door 471:</label>
-    <input type="file" id="door471" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="471" accept=".csv" required /><br><br>
 
     <label>Door 473:</label>
-    <input type="file" id="door473" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="473" accept=".csv" required /><br><br>
 
     <label>Door 474:</label>
-    <input type="file" id="door474" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="474" accept=".csv" required /><br><br>
 
     <label>Door 476:</label>
-    <input type="file" id="door476" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="476" accept=".csv" required /><br><br>
 
     <label>Door 477:</label>
-    <input type="file" id="door477" accept=".csv" required /><br><br>
+    <input type="file" class="doorFile" data-door="477" accept=".csv" required /><br><br>
 
     <button type="submit">Generate Highlighted Report</button>
   </form>
 
   <div id="status"></div>
 
+  <!-- Libraries for XLSX and CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
