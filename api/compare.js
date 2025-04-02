@@ -1,8 +1,6 @@
 import Busboy from "busboy";
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
-import { fileTypeFromBuffer } from "file-type";
-import { parse } from "csv-parse/sync";
 
 export const config = {
   api: {
@@ -19,17 +17,13 @@ export default async function handler(req, res) {
   const busboy = Busboy({ headers: req.headers });
 
   const parseForm = new Promise((resolve, reject) => {
-    busboy.on("file", (fieldname, file, filename) => {
+    busboy.on("file", (fieldname, file) => {
       const chunks = [];
       file.on("data", (data) => chunks.push(data));
       file.on("end", () => {
-        buffers[fieldname] = {
-          buffer: Buffer.concat(chunks),
-          filename: filename || "",
-        };
+        buffers[fieldname] = Buffer.concat(chunks);
       });
     });
-
     busboy.on("finish", resolve);
     busboy.on("error", reject);
     req.pipe(busboy);
@@ -37,119 +31,90 @@ export default async function handler(req, res) {
 
   await parseForm;
 
-  const mainFile = buffers["main"];
-  if (!mainFile) return res.status(400).send("Missing main file");
-
   const mainWorkbook = new ExcelJS.Workbook();
-  await mainWorkbook.xlsx.load(mainFile.buffer);
+  const mainFileBuffer = buffers["mainFile"];
+  const isMainCsv = mainFileBuffer.toString("utf8").startsWith("First Name") || mainFileBuffer.toString("utf8").startsWith('"First Name"');
+  await (isMainCsv
+    ? mainWorkbook.csv.read(Readable.from(mainFileBuffer))
+    : mainWorkbook.xlsx.load(mainFileBuffer));
 
-  for (let i = 1; i <= 6; i++) {
-    const field = `door${i}`;
-    const refFile = buffers[field];
-    if (!refFile) continue;
+  const newWorkbook = new ExcelJS.Workbook();
 
-    const tab = mainWorkbook.getWorksheet(i);
-    if (!tab) continue;
+  for (const field in buffers) {
+    if (field === "mainFile") continue;
 
-    // Step 1: Delete columns A–C from row 4+
-    for (let rowNum = tab.rowCount; rowNum >= 4; rowNum--) {
-      tab.getRow(rowNum).splice(1, 3);
+    const doorNumber = field.replace("door", "");
+    const referenceBuffer = buffers[field];
+
+    const referenceWorkbook = new ExcelJS.Workbook();
+    await referenceWorkbook.csv.read(Readable.from(referenceBuffer));
+    const referenceSheet = referenceWorkbook.worksheets[0];
+
+    const tabName = `Door ${doorNumber}`;
+    const mainSheet = mainWorkbook.getWorksheet(tabName);
+    if (!mainSheet) continue;
+
+    const newSheet = newWorkbook.addWorksheet(tabName);
+
+    // Copy headers (first 3 rows)
+    for (let i = 1; i <= 3; i++) {
+      const row = mainSheet.getRow(i);
+      newSheet.addRow(row.values);
     }
 
-    // Step 2: Remove blank rows (A & B)
-    for (let rowNum = tab.rowCount; rowNum >= 4; rowNum--) {
-      const row = tab.getRow(rowNum);
-      const a = row.getCell(1).value?.toString().trim();
-      const b = row.getCell(2).value?.toString().trim();
-      if (!a && !b) tab.spliceRows(rowNum, 1);
-    }
+    const oldNames = new Set();
+    mainSheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 3 && row.getCell(1).value && row.getCell(2).value) {
+        oldNames.add(`${row.getCell(1).value} ${row.getCell(2).value}`);
+      }
+    });
 
-    // Step 3: Detect file type
-    const refBuffer = refFile.buffer;
-    const type = await fileTypeFromBuffer(refBuffer);
-    console.log(`Detected file type for ${field}:`, type);
+    const newNames = new Set();
+    referenceSheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (row.getCell(1).value && row.getCell(2).value) {
+        newNames.add(`${row.getCell(1).value} ${row.getCell(2).value}`);
+      }
+    });
 
-    if (!type || (type.ext !== 'csv' && type.ext !== 'xlsx')) {
-      console.warn(`Unsupported file type for ${field}:`, type);
-      continue;
-    }
-
-    // Step 4: Parse file into name list
-    let referenceNames = [];
-
-    if (type.ext === "csv") {
-      try {
-        const parsed = parse(refBuffer.toString(), {
-          skip_empty_lines: true,
+    // Highlight additions
+    referenceSheet.eachRow((row, rowNumber) => {
+      const newRow = [];
+      row.eachCell(cell => newRow.push(cell.value));
+      const fullName = `${row.getCell(1).value} ${row.getCell(2).value}`;
+      const excelRow = newSheet.addRow(newRow);
+      if (!oldNames.has(fullName)) {
+        excelRow.eachCell(cell => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFF00" },
+          };
         });
-        referenceNames = parsed.map((row) => ({
-          last: row[0]?.trim(),
-          first: row[1]?.trim(),
-          full: `${row[0]?.trim()} ${row[1]?.trim()}`.trim(),
-        }));
-      } catch (err) {
-        console.error(`Error parsing CSV for ${field}:`, err);
-        continue;
       }
-    }
+    });
 
-    if (type.ext === "xlsx") {
-      try {
-        const refWorkbook = new ExcelJS.Workbook();
-        await refWorkbook.xlsx.load(refBuffer);
-        const sheet = refWorkbook.worksheets[0];
-        sheet.eachRow((row, rowNum) => {
-          if (rowNum === 1) return;
-          const last = row.getCell(1).value?.toString().trim();
-          const first = row.getCell(2).value?.toString().trim();
-          if (last || first) {
-            referenceNames.push({ last, first, full: `${last} ${first}`.trim() });
-          }
+    // Highlight removals
+    mainSheet.eachRow((row, rowNumber) => {
+      if (rowNumber <= 3) return;
+      const fullName = `${row.getCell(1).value} ${row.getCell(2).value}`;
+      if (!newNames.has(fullName)) {
+        const values = [];
+        row.eachCell(cell => values.push(cell.value));
+        const removedRow = newSheet.addRow(values);
+        removedRow.eachCell(cell => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF0000" },
+          };
         });
-      } catch (err) {
-        console.error(`Error parsing XLSX for ${field}:`, err);
-        continue;
       }
-    }
-
-    // Step 5: Paste into D & E
-    for (let r = 0; r < referenceNames.length; r++) {
-      const name = referenceNames[r];
-      const rowIndex = r + 4;
-      const row = tab.getRow(rowIndex);
-      row.getCell(4).value = name.last;
-      row.getCell(5).value = name.first;
-    }
-
-    // Step 6: Compare A/B with D/E
-    for (let rowNum = 4; rowNum <= tab.rowCount; rowNum++) {
-      const row = tab.getRow(rowNum);
-      const oldFull = `${row.getCell(1).value || ""} ${row.getCell(2).value || ""}`.trim();
-      const newFull = `${row.getCell(4).value || ""} ${row.getCell(5).value || ""}`.trim();
-
-      const highlight = (cell, color) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: color },
-        };
-      };
-
-      if (oldFull && !referenceNames.find((n) => n.full === oldFull)) {
-        highlight(row.getCell(1), "FF0000"); // Red
-        highlight(row.getCell(2), "FF0000");
-      }
-
-      if (newFull && oldFull !== newFull && !tab.getColumn(1).values.includes(newFull)) {
-        highlight(row.getCell(4), "FFFF00"); // Yellow
-        highlight(row.getCell(5), "FFFF00");
-      }
-    }
+    });
   }
 
-  // Send updated file
-  const buffer = await mainWorkbook.xlsx.writeBuffer();
+  const buffer = await newWorkbook.xlsx.writeBuffer();
+  res.setHeader("Content-Disposition", "attachment; filename=highlighted.xlsx");
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", 'attachment; filename="highlighted-report.xlsx"');
-  res.send(Buffer.from(buffer));
+  res.send(buffer);
 }
