@@ -1,9 +1,9 @@
 {
-  "type": "module",
+  "name": "data-center-access-reports",
+  "version": "1.0.0",
   "dependencies": {
-    "busboy": "^1.6.0",
-    "exceljs": "^4.3.0",
-    "file-type": "^18.0.0",
-    "csv-parse": "^5.5.0"
+    "exceljs": "^4.4.0",
+    "formidable": "^3.5.0",
+    "csv-parser": "^3.0.0"
   }
 }
