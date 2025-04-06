@@ -130,7 +130,27 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
     const blob = new Blob([wbout], { type: "application/octet-stream" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "Updated_Access_Report.xlsx";
+
+    // ✅ Get month/year from uploaded filename & add +1 month
+    const originalName = mainFile.name;
+    const match = originalName.match(/^(\d{4})_(\d{2})/);
+    let fileName = "Updated_Access_Report.xlsx"; // fallback
+
+    if (match) {
+      let year = parseInt(match[1]);
+      let month = parseInt(match[2]);
+
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+
+      const mm = String(month).padStart(2, "0");
+      fileName = `${year}_${mm}_Data Center Security List.xlsx`;
+    }
+
+    link.download = fileName;
     link.click();
 
     status.textContent = "✅ File generated!";
