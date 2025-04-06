@@ -63,9 +63,11 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       const header = data.slice(0, 3);
       const workingRows = data.slice(3);
 
+      const clean = str => (str || "").toString().replace(/\*+/g, "").trim();
+
       const leftNames = workingRows.map(row => [
-        (row[3] || "").toString().trim(),
-        (row[4] || "").toString().trim()
+        clean(row[3]),
+        clean(row[4])
       ]).filter(([a, b]) => a || b);
 
       const aligned = [];
@@ -74,8 +76,8 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         const l = iL < leftNames.length ? leftNames[iL] : ["", ""];
         const r = iR < csvNames.length ? csvNames[iR] : ["", ""];
 
-        const lName = l[0].toLowerCase() + " " + l[1].toLowerCase();
-        const rName = r[0].toLowerCase() + " " + r[1].toLowerCase();
+        const lName = `${l[0].toLowerCase()} ${l[1].toLowerCase()}`;
+        const rName = `${r[0].toLowerCase()} ${r[1].toLowerCase()}`;
 
         if (lName === rName) {
           aligned.push({ A: l[0], B: l[1], D: r[0], E: r[1], highlight: null });
@@ -131,10 +133,10 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
 
-    // ✅ Get month/year from uploaded filename & add +1 month
+    // Naming based on original file, +1 month
     const originalName = mainFile.name;
     const match = originalName.match(/^(\d{4})_(\d{2})/);
-    let fileName = "Updated_Access_Report.xlsx"; // fallback
+    let fileName = "Updated_Access_Report.xlsx";
 
     if (match) {
       let year = parseInt(match[1]);
@@ -153,7 +155,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
     link.download = fileName;
     link.click();
 
-    status.textContent = "✅ File generated!";
+    status.textContent = "✅ Report generated!";
   } catch (err) {
     console.error(err);
     status.textContent = "❌ Error occurred.";
