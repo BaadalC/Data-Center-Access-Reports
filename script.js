@@ -24,19 +24,41 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       const csvText = await csvFile.text();
       const csvParsed = Papa.parse(csvText.trim(), { header: false }).data;
 
-      let csvNames = csvParsed
+      let csvRaw = csvParsed
         .slice(1)
-        .map(row => [row[0]?.trim(), row[1]?.trim()])
+        .map(row => [row[0]?.trim(), row[1]?.trim(), row[2]?.trim()]) // last, first, card
         .filter(([a, b]) => a || b);
 
-      // ✅ Remove duplicates from CSV based on lowercase full name
-      const seen = new Set();
-      csvNames = csvNames.filter(([a, b]) => {
-        const key = `${a.toLowerCase()} ${b.toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      // ✅ Deduplicate with card number check
+      const uniqueMap = new Map();
+      for (const [last, first, card] of csvRaw) {
+        const key = `${last.toLowerCase()} ${first.toLowerCase()}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, [{ last, first, card }]);
+        } else {
+          uniqueMap.get(key).push({ last, first, card });
+        }
+      }
+
+      const csvNames = [];
+      for (const entries of uniqueMap.values()) {
+        if (entries.length === 1) {
+          csvNames.push([entries[0].last, entries[0].first]);
+        } else {
+          const withCard = entries.filter(e => e.card);
+          const withoutCard = entries.filter(e => !e.card);
+
+          if (withCard.length > 0) {
+            // Keep all with card numbers, discard blank duplicates
+            for (const e of withCard) {
+              csvNames.push([e.last, e.first]);
+            }
+          } else {
+            // No card numbers, treat as true duplicates, keep only one
+            csvNames.push([entries[0].last, entries[0].first]);
+          }
+        }
+      }
 
       const sheetName = `Door ${doorNumber}`;
       const sheet = workbook.Sheets[sheetName];
@@ -68,19 +90,13 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         const rName = r[0].toLowerCase() + " " + r[1].toLowerCase();
 
         if (lName === rName) {
-          aligned.push({
-            A: l[0], B: l[1], D: r[0], E: r[1], highlight: null
-          });
+          aligned.push({ A: l[0], B: l[1], D: r[0], E: r[1], highlight: null });
           iL++; iR++;
         } else if (lName < rName) {
-          aligned.push({
-            A: l[0], B: l[1], D: "", E: "", highlight: "removed"
-          });
+          aligned.push({ A: l[0], B: l[1], D: "", E: "", highlight: "removed" });
           iL++;
         } else {
-          aligned.push({
-            A: "", B: "", D: r[0], E: r[1], highlight: "added"
-          });
+          aligned.push({ A: "", B: "", D: r[0], E: r[1], highlight: "added" });
           iR++;
         }
       }
@@ -89,10 +105,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       const yellow = { fill: { fgColor: { rgb: "FFFF00" } } };
 
       const finalRows = aligned.map(obj => {
-        const row = [
-          obj.A, obj.B, "", obj.D, obj.E, "", "", "", "", ""
-        ];
-
+        const row = [obj.A, obj.B, "", obj.D, obj.E, "", "", "", "", ""];
         if (obj.highlight === "removed") {
           row[0] = { v: obj.A, s: red };
           row[1] = { v: obj.B, s: red };
@@ -100,7 +113,6 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
           row[3] = { v: obj.D, s: yellow };
           row[4] = { v: obj.E, s: yellow };
         }
-
         return row;
       });
 
