@@ -89,30 +89,34 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         }
       }
 
-      // Extra safety: ensure added highlights for names on right but not left
       aligned.forEach(obj => {
         const aBlank = !obj.A || obj.A.trim() === "";
         const bBlank = !obj.B || obj.B.trim() === "";
         const dFilled = obj.D && obj.D.trim() !== "";
         const eFilled = obj.E && obj.E.trim() !== "";
-        if (aBlank && bBlank && dFilled && eFilled) {
+        if (aBlank && bBlank && dFilled && eFilled && !obj.highlight) {
           obj.highlight = "added";
         }
       });
 
-      // Formatting styles
-      const bold = { font: { bold: true } };
-      const italic = { font: { italic: true } };
-
       const finalRows = aligned.map(obj => {
-        const row = [obj.A, obj.B, "", obj.D, obj.E, "", "", "", "", ""];
+        const row = ["", "", "", "", "", "", "", "", "", ""];
 
         if (obj.highlight === "removed") {
-          row[0] = { v: obj.A, s: italic };
-          row[1] = { v: obj.B, s: italic };
+          row[0] = obj.A + "**";
+          row[1] = obj.B + "**";
+          row[3] = obj.D;
+          row[4] = obj.E;
         } else if (obj.highlight === "added") {
-          row[3] = { v: obj.D, s: bold };
-          row[4] = { v: obj.E, s: bold };
+          row[0] = obj.A;
+          row[1] = obj.B;
+          row[3] = obj.D + "*";
+          row[4] = obj.E + "*";
+        } else {
+          row[0] = obj.A;
+          row[1] = obj.B;
+          row[3] = obj.D;
+          row[4] = obj.E;
         }
 
         return row;
@@ -122,7 +126,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       workbook.Sheets[sheetName] = finalSheet;
     }
 
-    const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array", cellStyles: true });
+    const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
     const blob = new Blob([wbout], { type: "application/octet-stream" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
