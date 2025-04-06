@@ -29,7 +29,6 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         .map(row => [row[0]?.trim(), row[1]?.trim(), row[2]?.trim()])
         .filter(([a, b]) => a || b);
 
-      // ✅ Smart deduplication with card number logic
       const uniqueMap = new Map();
       for (const [last, first, card] of csvRaw) {
         const key = `${last.toLowerCase()} ${first.toLowerCase()}`;
@@ -90,7 +89,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         }
       }
 
-      // ✅ NEW: Re-check for added names where A & B are empty, D & E are filled
+      // Extra safety: ensure added highlights for names on right but not left
       aligned.forEach(obj => {
         const aBlank = !obj.A || obj.A.trim() === "";
         const bBlank = !obj.B || obj.B.trim() === "";
@@ -101,18 +100,21 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         }
       });
 
-      const red = { fill: { fgColor: { rgb: "FF0000" } } };
-      const yellow = { fill: { fgColor: { rgb: "FFFF00" } } };
+      // Formatting styles
+      const bold = { font: { bold: true } };
+      const italic = { font: { italic: true } };
 
       const finalRows = aligned.map(obj => {
         const row = [obj.A, obj.B, "", obj.D, obj.E, "", "", "", "", ""];
+
         if (obj.highlight === "removed") {
-          row[0] = { v: obj.A, s: red };
-          row[1] = { v: obj.B, s: red };
+          row[0] = { v: obj.A, s: italic };
+          row[1] = { v: obj.B, s: italic };
         } else if (obj.highlight === "added") {
-          row[3] = { v: obj.D, s: yellow };
-          row[4] = { v: obj.E, s: yellow };
+          row[3] = { v: obj.D, s: bold };
+          row[4] = { v: obj.E, s: bold };
         }
+
         return row;
       });
 
