@@ -4,111 +4,58 @@
   <meta charset="UTF-8" />
   <title>Data Center Security List Generator</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    body {
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      max-width: 700px;
-      margin: 40px auto;
-      padding: 20px;
-      background-color: #fafafa;
-      color: #333;
-      line-height: 1.6;
-    }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 10px;
-    }
-
-    form {
-      background-color: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    }
-
-    label {
-      font-weight: 500;
-      display: block;
-      margin-top: 12px;
-    }
-
-    input[type="file"] {
-      margin-top: 4px;
-      margin-bottom: 12px;
-      width: 100%;
-    }
-
-    button {
-      display: block;
-      width: 100%;
-      padding: 10px;
-      background-color: #0078d4;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: #005ea2;
-    }
-
-    #status {
-      margin-top: 20px;
-      text-align: center;
-      font-weight: bold;
-    }
-
-    a.download-link {
-      color: #0078d4;
-      text-decoration: none;
-    }
-
-    a.download-link:hover {
-      text-decoration: underline;
-    }
-  </style>
 </head>
 <body>
-  <h2>Data Center Security List Generator</h2>
+  <div class="container">
+    <img src="LandOlakes.png" alt="Land O'Lakes Logo" class="logo" />
 
-  <form id="uploadForm">
-    <h3>Upload Previous Month’s Data Center Security Audit</h3>
-    <p>
-      <a class="download-link"
-         href="https://landolakes.sharepoint.com/sites/Cor-SOC-OPS/Data%20Center%20Security%20Audits/Forms/AllItems.aspx?viewpath=%2Fsites%2FCor%2DSOC%2DOPS%2FData%20Center%20Security%20Audits%2FForms%2FAllItems%2Easpx"
-         target="_blank">
-        Click here to download the audit file from SharePoint
-      </a>
-    </p>
-    <input type="file" id="mainFile" accept=".xlsx" required />
+    <h2>Data Center Security List Generator</h2>
 
-    <h3>Upload Reference Files (CSV - One for Each Door)</h3>
+    <form id="uploadForm">
+      <h3>Upload Previous Month’s Data Center Security Audit</h3>
+      <p><a href="https://landolakes.sharepoint.com/sites/Cor-SOC-OPS/Data%20Center%20Security%20Audits/Forms/AllItems.aspx?viewpath=%2Fsites%2FCor%2DSOC%2DOPS%2FData%20Center%20Security%20Audits%2FForms%2FAllItems%2Easpx" target="_blank">Click here to download the audit file from SharePoint</a></p>
+      <input type="file" id="mainFile" accept=".xlsx" required />
 
-    <label for="door470">Door 470:</label>
-    <input type="file" class="doorFile" data-door="470" accept=".csv" required id="door470" />
+      <h3>Upload Reference Files (CSV - One for Each Door)</h3>
+      <div class="file-group">
+        <label>Door 470:</label>
+        <input type="file" class="doorFile" data-door="470" accept=".csv" required />
+      </div>
 
-    <label for="door471">Door 471:</label>
-    <input type="file" class="doorFile" data-door="471" accept=".csv" required id="door471" />
+      <div class="file-group">
+        <label>Door 471:</label>
+        <input type="file" class="doorFile" data-door="471" accept=".csv" required />
+      </div>
 
-    <label for="door473">Door 473:</label>
-    <input type="file" class="doorFile" data-door="473" accept=".csv" required id="door473" />
+      <div class="file-group">
+        <label>Door 473:</label>
+        <input type="file" class="doorFile" data-door="473" accept=".csv" required />
+      </div>
 
-    <label for="door474">Door 474:</label>
-    <input type="file" class="doorFile" data-door="474" accept=".csv" required id="door474" />
+      <div class="file-group">
+        <label>Door 474:</label>
+        <input type="file" class="doorFile" data-door="474" accept=".csv" required />
+      </div>
 
-    <label for="door476">Door 476:</label>
-    <input type="file" class="doorFile" data-door="476" accept=".csv" required id="door476" />
+      <div class="file-group">
+        <label>Door 476:</label>
+        <input type="file" class="doorFile" data-door="476" accept=".csv" required />
+      </div>
 
-    <label for="door477">Door 477:</label>
-    <input type="file" class="doorFile" data-door="477" accept=".csv" required id="door477" />
+      <div class="file-group">
+        <label>Door 477:</label>
+        <input type="file" class="doorFile" data-door="477" accept=".csv" required />
+      </div>
 
-    <button type="submit">Generate Report</button>
-  </form>
+      <button type="submit" class="btn">Generate Report</button>
+    </form>
 
-  <div id="status"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <footer class="footer">
+    © 2025 Land O’Lakes | Internal Use Only
+  </footer>
 
   <!-- Libraries for XLSX and CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

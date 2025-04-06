@@ -1,0 +1,85 @@
+body {
+  font-family: 'Franklin Gothic Book', Arial, sans-serif;
+  background-color: #f4f4f4;
+  margin: 0;
+  padding: 0;
+  color: #333;
+}
+
+.container {
+  max-width: 800px;
+  margin: 30px auto;
+  background-color: #fff;
+  padding: 30px 40px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.logo {
+  width: 180px;
+  display: block;
+  margin: 0 auto 20px;
+}
+
+h2 {
+  text-align: center;
+  color: #2f3e1e; /* Field Green */
+  font-family: 'Arial Black', sans-serif;
+}
+
+h3 {
+  color: #2f3e1e;
+  margin-top: 25px;
+}
+
+.file-group {
+  margin-bottom: 15px;
+}
+
+input[type="file"] {
+  display: block;
+  margin-top: 5px;
+  font-size: 15px;
+}
+
+a {
+  color: #0072ce; /* SharePoint blue link */
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  background-color: #2f3e1e; /* Field Green */
+  color: #fff;
+  padding: 12px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  margin-top: 20px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background-color: #1f2a14;
+}
+
+.status {
+  margin-top: 20px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.footer {
+  text-align: center;
+  padding: 15px 10px;
+  font-size: 14px;
+  color: #666;
+  background-color: #f0f0f0;
+  border-top: 1px solid #ccc;
+  margin-top: 40px;
+}
