@@ -26,10 +26,10 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
 
       let csvRaw = csvParsed
         .slice(1)
-        .map(row => [row[0]?.trim(), row[1]?.trim(), row[2]?.trim()]) // last, first, card
+        .map(row => [row[0]?.trim(), row[1]?.trim(), row[2]?.trim()])
         .filter(([a, b]) => a || b);
 
-      // ✅ Deduplicate with card number check
+      // ✅ Smart deduplication based on name + card number
       const uniqueMap = new Map();
       for (const [last, first, card] of csvRaw) {
         const key = `${last.toLowerCase()} ${first.toLowerCase()}`;
@@ -46,15 +46,11 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
           csvNames.push([entries[0].last, entries[0].first]);
         } else {
           const withCard = entries.filter(e => e.card);
-          const withoutCard = entries.filter(e => !e.card);
-
           if (withCard.length > 0) {
-            // Keep all with card numbers, discard blank duplicates
             for (const e of withCard) {
               csvNames.push([e.last, e.first]);
             }
           } else {
-            // No card numbers, treat as true duplicates, keep only one
             csvNames.push([entries[0].last, entries[0].first]);
           }
         }
@@ -72,13 +68,6 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         (row[3] || "").toString().trim(),
         (row[4] || "").toString().trim()
       ]).filter(([a, b]) => a || b);
-
-      const cleaned = workingRows.map(row => {
-        const newRow = Array(10).fill("");
-        newRow[3] = row[3] || "";
-        newRow[4] = row[4] || "";
-        return newRow;
-      });
 
       const aligned = [];
       let iL = 0, iR = 0;
@@ -100,6 +89,15 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
           iR++;
         }
       }
+
+      // ✅ FIX: Recheck added names with empty A/B and filled D/E
+      aligned.forEach(obj => {
+        const isLeftEmpty = !obj.A?.trim() && !obj.B?.trim();
+        const isRightFilled = obj.D?.trim() && obj.E?.trim();
+        if (isLeftEmpty && isRightFilled && !obj.highlight) {
+          obj.highlight = "added";
+        }
+      });
 
       const red = { fill: { fgColor: { rgb: "FF0000" } } };
       const yellow = { fill: { fgColor: { rgb: "FFFF00" } } };
