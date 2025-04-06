@@ -6,55 +6,52 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="header">
+    <img src="LandOLakes.png" alt="Land O'Lakes Logo" class="logo">
+    <h1>DATA CENTER SECURITY LIST GENERATOR</h1>
+  </div>
+
   <div class="container">
-    <!-- Logo -->
-    <img src="LandOlakes.png" alt="Land O'Lakes Logo" class="logo" />
-
-    <!-- Title -->
-    <h2>Data Center Security List Generator</h2>
-
     <form id="uploadForm">
-      <!-- Main File Upload -->
       <h3>Upload Previous Month’s Data Center Security Audit</h3>
-      <p>
-        <a href="https://landolakes.sharepoint.com/sites/Cor-SOC-OPS/Data%20Center%20Security%20Audits/Forms/AllItems.aspx?viewpath=%2Fsites%2FCor%2DSOC%2DOPS%2FData%20Center%20Security%20Audits%2FForms%2FAllItems%2Easpx" target="_blank">
-          Click here to download the audit file from SharePoint
-        </a>
-      </p>
-      <input type="file" id="mainFile" accept=".xlsx" required />
+      <a href="https://landolakes.sharepoint.com/sites/Cor-SOC-OPS/Data%20Center%20Security%20Audits/Forms/AllItems.aspx?viewpath=%2Fsites%2FCor%2DSOC%2DOPS%2FData%20Center%20Security%20Audits%2FForms%2FAllItems%2Easpx"
+         target="_blank">Click here to download the audit file from SharePoint</a>
+      <input type="file" id="mainFile" accept=".xlsx" required><br>
 
-      <!-- CSV Uploads -->
       <h3>Upload Reference Files (CSV - One for Each Door)</h3>
 
-      <label>Door 470:</label>
-      <input type="file" class="doorFile" data-door="470" accept=".csv" required />
+      <div class="file-row">
+        <label>Door 470:</label>
+        <input type="file" class="doorFile" data-door="470" accept=".csv" required>
+      </div>
+      <div class="file-row">
+        <label>Door 471:</label>
+        <input type="file" class="doorFile" data-door="471" accept=".csv" required>
+      </div>
+      <div class="file-row">
+        <label>Door 473:</label>
+        <input type="file" class="doorFile" data-door="473" accept=".csv" required>
+      </div>
+      <div class="file-row">
+        <label>Door 474:</label>
+        <input type="file" class="doorFile" data-door="474" accept=".csv" required>
+      </div>
+      <div class="file-row">
+        <label>Door 476:</label>
+        <input type="file" class="doorFile" data-door="476" accept=".csv" required>
+      </div>
+      <div class="file-row">
+        <label>Door 477:</label>
+        <input type="file" class="doorFile" data-door="477" accept=".csv" required>
+      </div>
 
-      <label>Door 471:</label>
-      <input type="file" class="doorFile" data-door="471" accept=".csv" required />
-
-      <label>Door 473:</label>
-      <input type="file" class="doorFile" data-door="473" accept=".csv" required />
-
-      <label>Door 474:</label>
-      <input type="file" class="doorFile" data-door="474" accept=".csv" required />
-
-      <label>Door 476:</label>
-      <input type="file" class="doorFile" data-door="476" accept=".csv" required />
-
-      <label>Door 477:</label>
-      <input type="file" class="doorFile" data-door="477" accept=".csv" required />
-
-      <!-- Submit -->
-      <button type="submit">Generate Report</button>
+      <button type="submit">GENERATE REPORT</button>
     </form>
 
     <div id="status"></div>
-
-    <!-- Footer -->
-    <div class="footer">© 2025 Land O’Lakes | Internal Use Only</div>
+    <footer>© 2025 Land O’Lakes | Internal Use Only</footer>
   </div>
 
-  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="script.js"></script>
