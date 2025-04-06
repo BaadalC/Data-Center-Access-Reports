@@ -7,58 +7,6 @@
 </head>
 <body>
   <div class="container">
-    <img src="LandOlakes.png" alt="Land O'Lakes Logo" class="logo" />
-
-    <h2>Data Center Security List Generator</h2>
-
-    <form id="uploadForm">
-      <h3>Upload Previous Month’s Data Center Security Audit</h3>
-      <p><a href="https://landolakes.sharepoint.com/sites/Cor-SOC-OPS/Data%20Center%20Security%20Audits/Forms/AllItems.aspx?viewpath=%2Fsites%2FCor%2DSOC%2DOPS%2FData%20Center%20Security%20Audits%2FForms%2FAllItems%2Easpx" target="_blank">Click here to download the audit file from SharePoint</a></p>
-      <input type="file" id="mainFile" accept=".xlsx" required />
-
-      <h3>Upload Reference Files (CSV - One for Each Door)</h3>
-      <div class="file-group">
-        <label>Door 470:</label>
-        <input type="file" class="doorFile" data-door="470" accept=".csv" required />
-      </div>
-
-      <div class="file-group">
-        <label>Door 471:</label>
-        <input type="file" class="doorFile" data-door="471" accept=".csv" required />
-      </div>
-
-      <div class="file-group">
-        <label>Door 473:</label>
-        <input type="file" class="doorFile" data-door="473" accept=".csv" required />
-      </div>
-
-      <div class="file-group">
-        <label>Door 474:</label>
-        <input type="file" class="doorFile" data-door="474" accept=".csv" required />
-      </div>
-
-      <div class="file-group">
-        <label>Door 476:</label>
-        <input type="file" class="doorFile" data-door="476" accept=".csv" required />
-      </div>
-
-      <div class="file-group">
-        <label>Door 477:</label>
-        <input type="file" class="doorFile" data-door="477" accept=".csv" required />
-      </div>
-
-      <button type="submit" class="btn">Generate Report</button>
-    </form>
-
-    <div id="status" class="status"></div><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Data Center Security List Generator</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="container">
     <!-- Logo -->
     <img src="LandOlakes.png" alt="Land O'Lakes Logo" class="logo" />
 
@@ -107,19 +55,6 @@
   </div>
 
   <!-- Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-  <script src="script.js"></script>
-</body>
-</html>
-
-  </div>
-
-  <footer class="footer">
-    © 2025 Land O’Lakes | Internal Use Only
-  </footer>
-
-  <!-- Libraries for XLSX and CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="script.js"></script>
