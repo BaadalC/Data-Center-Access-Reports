@@ -29,7 +29,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         .map(row => [row[0]?.trim(), row[1]?.trim(), row[2]?.trim()])
         .filter(([a, b]) => a || b);
 
-      // ✅ Smart deduplication based on name + card number
+      // ✅ Smart deduplication with card number logic
       const uniqueMap = new Map();
       for (const [last, first, card] of csvRaw) {
         const key = `${last.toLowerCase()} ${first.toLowerCase()}`;
@@ -90,11 +90,13 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         }
       }
 
-      // ✅ FIX: Recheck added names with empty A/B and filled D/E
+      // ✅ NEW: Re-check for added names where A & B are empty, D & E are filled
       aligned.forEach(obj => {
-        const isLeftEmpty = !obj.A?.trim() && !obj.B?.trim();
-        const isRightFilled = obj.D?.trim() && obj.E?.trim();
-        if (isLeftEmpty && isRightFilled && !obj.highlight) {
+        const aBlank = !obj.A || obj.A.trim() === "";
+        const bBlank = !obj.B || obj.B.trim() === "";
+        const dFilled = obj.D && obj.D.trim() !== "";
+        const eFilled = obj.E && obj.E.trim() !== "";
+        if (aBlank && bBlank && dFilled && eFilled) {
           obj.highlight = "added";
         }
       });
