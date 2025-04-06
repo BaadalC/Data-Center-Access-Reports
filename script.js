@@ -23,10 +23,20 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
 
       const csvText = await csvFile.text();
       const csvParsed = Papa.parse(csvText.trim(), { header: false }).data;
-      const csvNames = csvParsed
+
+      let csvNames = csvParsed
         .slice(1)
         .map(row => [row[0]?.trim(), row[1]?.trim()])
         .filter(([a, b]) => a || b);
+
+      // ✅ Remove duplicates from CSV based on lowercase full name
+      const seen = new Set();
+      csvNames = csvNames.filter(([a, b]) => {
+        const key = `${a.toLowerCase()} ${b.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
       const sheetName = `Door ${doorNumber}`;
       const sheet = workbook.Sheets[sheetName];
@@ -36,13 +46,11 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       const header = data.slice(0, 3);
       const workingRows = data.slice(3);
 
-      // Extract left side names from D/E and clean
       const leftNames = workingRows.map(row => [
         (row[3] || "").toString().trim(),
         (row[4] || "").toString().trim()
       ]).filter(([a, b]) => a || b);
 
-      // Clean columns A–C and F–J
       const cleaned = workingRows.map(row => {
         const newRow = Array(10).fill("");
         newRow[3] = row[3] || "";
@@ -50,7 +58,6 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
         return newRow;
       });
 
-      // Align names with blank row insertion
       const aligned = [];
       let iL = 0, iR = 0;
       while (iL < leftNames.length || iR < csvNames.length) {
@@ -101,7 +108,6 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
       workbook.Sheets[sheetName] = finalSheet;
     }
 
-    // Export the workbook
     const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array", cellStyles: true });
     const blob = new Blob([wbout], { type: "application/octet-stream" });
     const link = document.createElement("a");
